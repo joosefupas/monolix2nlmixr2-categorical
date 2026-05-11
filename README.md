@@ -412,17 +412,6 @@ p <- plot_categorical_vpc(
 )
 ```
 
-## Suggested Citation
-
-If you use this repository in scientific work, cite the relevant R packages used in the workflow:
-
-- `monolix2rx`
-- `rxode2`
-- `babelmixr2`
-- `ggplot2`
-- `MASS`
-
-Also cite Monolix if the original model was developed using Monolix.
 
 ## License
 
