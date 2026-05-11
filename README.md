@@ -4,30 +4,6 @@ Utilities for translating **binary categorical Monolix models** into an `rxode2`
 
 This repository provides a patched categorical import path for Monolix `.mlxtran` models so that `babelmixr2` / `nlmixr2` workflows can also handle binary categorical endpoint models from Monolix. The goal is to support quick prediction, simulation, diagnostic, and categorical VPC-style exploration scenarios.
 
-## Suggested Repository Name
-
-Recommended:
-
-```text
-monolix2nlmixr2-categorical
-```
-
-Alternative options:
-
-```text
-monolix-categorical-to-nlmixr2
-babelmixr2-categorical-monolix
-monolix2rx-categorical-bridge
-categorical-monolix-nlmixr2
-nlmixr2-monolix-categorical
-```
-
-Suggested GitHub description:
-
-```text
-Import Monolix binary categorical endpoint models into babelmixr2/nlmixr2 workflows for quick simulation, prediction, diagnostics, and categorical VPC exploration.
-```
-
 ## Overview
 
 The main workflow:
