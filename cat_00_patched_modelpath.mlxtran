@@ -1,0 +1,74 @@
+<DATAFILE>
+
+[FILEINFO]
+file='mad_bin.csv'
+delimiter = comma
+header={EMPTY, ID, TIME, NOMTIME, TIMEUNIT, AMT, LIDV, MDV, CMT, NAME, EVENTU, CENS, EVID, WEIGHTB, SEX, TRTACT, DOSE, PROFDAY, PROFTIME, CYCLE}
+
+[CONTENT]
+ID = {use=identifier}
+TIME = {use=time}
+AMT = {use=amount}
+LIDV = {use=observation, type=discrete}
+MDV = {use=missingdependentvariable}
+CENS = {use=censored}
+EVID = {use=eventidentifier}
+WEIGHTB = {use=covariate, type=continuous}
+SEX = {use=covariate, type=categorical}
+TRTACT = {use=covariate, type=categorical}
+PROFDAY = {use=regressor}
+
+[SETTINGS]
+dataType = {'LIDV'=plasma}
+
+<MODEL>
+
+[COVARIATE]
+input = {WEIGHTB, SEX, TRTACT}
+
+SEX = {type=categorical, categories={'Female', 'Male'}}
+TRTACT = {type=categorical, categories={'100 mg', '1600 mg', '200 mg', '400 mg', '800 mg'}}
+
+[INDIVIDUAL]
+input = {theta0_pop, beta_time_pop, TRTACT, beta_theta0_TRTACT_1600_mg, beta_theta0_TRTACT_200_mg, beta_theta0_TRTACT_400_mg, beta_theta0_TRTACT_800_mg, WEIGHTB, beta_theta0_WEIGHTB, SEX, beta_theta0_SEX_Male, beta_beta_time_SEX_Male, omega_theta0, omega_beta_time}
+
+TRTACT = {type=categorical, categories={'100 mg', '1600 mg', '200 mg', '400 mg', '800 mg'}}
+SEX = {type=categorical, categories={'Female', 'Male'}}
+
+DEFINITION:
+theta0 = {distribution=normal, typical=theta0_pop, covariate={TRTACT, WEIGHTB, SEX}, coefficient={{0, beta_theta0_TRTACT_1600_mg, beta_theta0_TRTACT_200_mg, beta_theta0_TRTACT_400_mg, beta_theta0_TRTACT_800_mg}, beta_theta0_WEIGHTB, {0, beta_theta0_SEX_Male}}, sd=omega_theta0}
+beta_time = {distribution=logNormal, typical=beta_time_pop, covariate=SEX, coefficient={0, beta_beta_time_SEX_Male}, sd=omega_beta_time}
+
+[LONGITUDINAL]
+file = 'C:/Users/PASCUGI1/OneDrive - Novartis Pharma AG/Desktop/Projects/PAGE/GP/babelx_categorical/log_emax_hill_dose_reg_2.txt'
+
+<FIT>
+data = 'LIDV'
+model = Y
+
+<PARAMETER>
+beta_beta_time_SEX_Male = {value=-0.9981421191948994, method=MLE}
+beta_theta0_SEX_Male = {value=0.0074902013894715, method=MLE}
+beta_theta0_TRTACT_1600_mg = {value=0.6893941885313282, method=MLE}
+beta_theta0_TRTACT_200_mg = {value=0.3415072713920466, method=MLE}
+beta_theta0_TRTACT_400_mg = {value=-0.3722685053131138, method=MLE}
+beta_theta0_TRTACT_800_mg = {value=0.4682510967147386, method=MLE}
+beta_theta0_WEIGHTB = {value=-0.0051547838391986, method=MLE}
+beta_time_pop = {value=0.5944947529036277, method=MLE}
+omega_beta_time = {value=1, method=MLE}
+omega_theta0 = {value=1, method=MLE}
+theta0_pop = {value=-2.457060383056953, method=MLE}
+
+<MONOLIX>
+
+[TASKS]
+populationParameters()
+individualParameters(method = {conditionalMean, conditionalMode })
+fim(method = StochasticApproximation)
+logLikelihood(method = ImportanceSampling)
+plotResult(method = {indfits, parameterdistribution, covariancemodeldiagnosis, covariatemodeldiagnosis, obspred, vpc, residualsscatter, residualsdistribution, randomeffects, saemresults })
+
+[SETTINGS]
+GLOBAL:
+exportpath = 'cat_00'
+

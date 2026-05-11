@@ -1,0 +1,16 @@
+; Logistic dose–response with visit effect
+; Binary PD, parallel MAD study
+
+[LONGITUDINAL]
+input = {theta0,beta_time,PROFDAY}
+PROFDAY = {use = regressor}
+
+EQUATION:
+lp = theta0 + beta_time * PROFDAY
+
+DEFINITION:
+Y = {type = categorical, categories = {0,1},
+     logit(P(Y = 1)) = lp}
+
+OUTPUT:
+output = {Y}
