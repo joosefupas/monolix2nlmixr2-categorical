@@ -1,0 +1,3 @@
+parameter,statistics,p-value,test
+theta0,0.0197713,1,Kolmogorov-Smirnov
+beta_time,0.0800566,0.547496,Kolmogorov-Smirnov

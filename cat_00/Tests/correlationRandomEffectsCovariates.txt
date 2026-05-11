@@ -1,0 +1,7 @@
+eta,covariate,statistics,p-value,test
+eta_theta0,SEX,0.036972,0.848333,Anova
+eta_theta0,TRTACT,0.996089,0.419563,Anova
+eta_theta0,WEIGHTB,1.17437,0.24604,Pearson
+eta_beta_time,SEX,0.175559,0.677087,Anova
+eta_beta_time,TRTACT,2.3709,0.0665199,Anova
+eta_beta_time,WEIGHTB,-0.273244,0.785838,Pearson

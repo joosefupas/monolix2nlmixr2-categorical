@@ -1,0 +1,8 @@
+parameter,covariate,statistics,p-value,test
+theta0,beta_theta0_SEX_Male,13886.5,<2.2e-16,t-Test
+theta0,beta_theta0_TRTACT_1600_mg,3201.01,<2.2e-16,t-Test
+theta0,beta_theta0_TRTACT_200_mg,-2521.68,<2.2e-16,t-Test
+theta0,beta_theta0_TRTACT_400_mg,-574.119,<2.2e-16,t-Test
+theta0,beta_theta0_TRTACT_800_mg,3525.77,<2.2e-16,t-Test
+theta0,beta_theta0_WEIGHTB,-2594.92,<2.2e-16,t-Test
+beta_time,beta_beta_time_SEX_Male,-25.9999,<2.2e-16,t-Test

@@ -1,0 +1,8 @@
+parameter,statistics(sa),p-value(sa)
+beta_theta0_WEIGHTB,149.081,<2.2e-16
+beta_theta0_SEX_Male,855.794,<2.2e-16
+beta_theta0_TRTACT_1600_mg,121.467,<2.2e-16
+beta_theta0_TRTACT_200_mg,88.7131,<2.2e-16
+beta_theta0_TRTACT_400_mg,32.6402,<2.2e-16
+beta_theta0_TRTACT_800_mg,178.926,<2.2e-16
+beta_beta_time_SEX_Male,5.88976,3.87e-09

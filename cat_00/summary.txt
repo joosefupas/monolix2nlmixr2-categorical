@@ -1,0 +1,116 @@
+********************************************************************************
+*                           cat_00.mlxtran                                     *
+*                            at                                                *
+*                           Monolix version : 2023R1                           *
+********************************************************************************
+
+
+ESTIMATION OF THE POPULATION PARAMETERS ________________________________________
+
+Fixed Effects ----------------------------     se_sa    rse(%)
+theta0_pop                 :         -3.19   0.00738     0.232
+beta_theta0_SEX_Male       :          1.68   0.00196     0.117
+beta_theta0_TRTACT_1600_mg :         0.608     0.005     0.823
+beta_theta0_TRTACT_200_mg  :         -0.48   0.00541      1.13
+beta_theta0_TRTACT_400_mg  :         -0.11   0.00337      3.06
+beta_theta0_TRTACT_800_mg  :         0.675   0.00377     0.559
+beta_theta0_WEIGHTB        :       -0.0115  7.68e-05     0.671
+beta_time_pop              :          0.95    0.0898      9.46
+beta_beta_time_SEX_Male    :         -1.98     0.336        17
+
+Standard Deviation of the Random Effects -
+omega_theta0               :       0.00134  0.000631      47.2
+omega_beta_time            :         0.373    0.0951      25.5
+
+Elapsed time (seconds):      3.7
+CPU time     (seconds):        4
+Exploratory phase iterations:      500 (Stopped at the maximum number of iterations/auto-stop criteria have not been reached)
+Smoothing phase iterations:        107 (Autostop)
+
+ _______________________________________________________________________________
+
+
+
+ESTIMATION OF THE INDIVIDUAL PARAMETERS ________________________________________
+
+
+Estimation of the individual parameters by Conditional Distribution ------------
+                  min        Q1    median        Q3       max
+theta0    :     -4.63     -3.92     -3.14     -2.37     -1.68
+beta_time :     0.115     0.133     0.354      1.04      1.68
+
+Elapsed time (seconds):     0.28
+CPU time     (seconds):     0.35
+Iterations:       66 (Autostop)
+
+ -------------------------------------------------------------------------------
+
+
+Estimation of the individual parameters by Conditional Mode --------------------
+                  min        Q1    median        Q3       max
+theta0    :     -4.63     -3.92     -3.14     -2.37     -1.68
+beta_time :     0.112     0.131     0.367      1.04      1.53
+
+Elapsed time (seconds):     0.05
+CPU time     (seconds):        0
+
+ -------------------------------------------------------------------------------
+
+ _______________________________________________________________________________
+
+
+
+ESTIMATION OF THE FISHER INFORMATION MATRIX ____________________________________
+
+
+Estimation of the Fisher information matrix by Stochastic Approximation --------
+
+Correlation Matrix :
+                theta0_pop         1
+       beta_theta0_WEIGHTB  -0.95742         1
+      beta_theta0_SEX_Male    0.5751  -0.63627         1
+beta_theta0_TRTACT_1600_mg  -0.70757   0.57226  -0.34913         1
+ beta_theta0_TRTACT_200_mg  -0.83798   0.73084  -0.58926   0.77681         1
+ beta_theta0_TRTACT_400_mg  -0.77181   0.61059  -0.51668   0.75093   0.84336         1
+ beta_theta0_TRTACT_800_mg  -0.77447      0.62   -0.5244     0.779   0.86322    0.8735         1
+             beta_time_pop  0.062307 -0.065323   0.03908 -0.020066 -0.034279 -0.040737 0.0063252         1
+   beta_beta_time_SEX_Male   0.50617  -0.41448   0.23425  -0.56813  -0.60627  -0.56598  -0.63823   -0.3126         1
+              omega_theta0   0.44107  -0.36146   0.27219  -0.66228  -0.64918  -0.53376  -0.59155 -0.031082   0.51261         1
+           omega_beta_time  -0.41166   0.38713  -0.24817   0.47681   0.46077   0.34206   0.47291   0.18349  -0.51587  -0.44064         1
+
+                               min       max   max/min
+Eigen values           :     0.005       6.3   1.3e+03
+
+Elapsed time (seconds):      1.2
+CPU time     (seconds):      1.8
+Iterations:      152 (Autostop)
+
+ -------------------------------------------------------------------------------
+
+ _______________________________________________________________________________
+
+
+
+ESTIMATION OF THE LOG-LIKELIHOOD _______________________________________________
+
+                                                            (is)
+-2 x log-likelihood                       (OFV) :         416.11
+Akaike Information Criteria               (AIC) :         438.11
+Corrected Bayesian Information Criteria  (BICc) :         463.75
+Bayesian Information Criteria             (BIC) :         459.15
+
+Elapsed time                          (seconds) :           5.04
+CPU time                              (seconds) :           8.00
+MonteCarlo size (is):    10000 (Fixed number of iterations)
+
+
+[Importance Sampling] Standard error        : 0.029
+                      Sampling distribution : T-distribution with 5 degrees of freedom
+
+ _______________________________________________________________________________
+
+DATASET INFORMATION
+Number of individuals: 50
+Number of observations (LIDV): 500
+Number of doses: 300
+
