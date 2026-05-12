@@ -209,33 +209,6 @@ p <- plot_categorical_vpc(
 print(p)
 ```
 
-## Saving the VPC Plot
-
-The plotting section includes an optional commented block for saving the VPC as a PNG file.
-
-Example:
-
-```r
-dir.create("plots", showWarnings = FALSE, recursive = TRUE)
-
-endpoint_label <- "LLDAS5"
-timestamp <- format(Sys.time(), "%d-%m-%y_%H-%M-%S")
-
-out_file <- file.path(
-  "plots",
-  paste0("categorical_vpc_", endpoint_label, "_", timestamp, ".png")
-)
-
-ggsave(
-  filename = out_file,
-  plot     = p,
-  width    = 8,
-  height   = 6,
-  units    = "in",
-  dpi      = 300
-)
-```
-
 ## Main Functions
 
 ### `monolix2rx_categorical()`
