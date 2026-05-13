@@ -1371,9 +1371,11 @@ as.nlmixr2.categorical <- function(x, ..., ci = 0.95) {
 # SECTION 9: CATEGORICAL VPC PLOT
 # ══════════════════════════════════════════════════════════════
 
-
-plot_categorical_vpc <- function(result, nBins = 10, nSim = 500,
-                                 ci = 0.90, seed = 12345,
+plot_categorical_vpc <- function(result,
+                                 nBins = 10,
+                                 nSim = 500,
+                                 ci = 0.90,
+                                 seed = 12345,
                                  xlab = "Time",
                                  ylab = "P(Y = 1)",
                                  title = NULL,
@@ -1385,297 +1387,418 @@ plot_categorical_vpc <- function(result, nBins = 10, nSim = 500,
                                  xTickStart = 0,
                                  xLimits = NULL,
                                  xLabelDigits = 0,
-                                 rotateXLabels = FALSE) {
-  .ui <- result$ui
-  .dat <- result$predIpredData
-  .omega <- result$omega
-  .etaNames <- colnames(.omega)
+                                 rotateXLabels = FALSE,
+                                 showEmpirical = TRUE,
+                                 showPI = TRUE,
+                                 showMedian = TRUE,
+                                 strata = NULL,
+                                 timeCol = NULL,
+                                 simCol = "sim_id",
+                                 yCol = NULL,
+                                 probCol = NULL,
+                                 quiet = TRUE) {
+  
   
   .toPlotTime <- function(x) {
-    (x - xOffset) / xScale
+    (as.numeric(x) - xOffset) / xScale
   }
   
-  .predModel <- .categoricalPredModel(.ui)
-  .prep <- .categoricalPrepData(.ui)
-  .dataNum <- .prep$data
-  
-  .iniDf <- .ui$iniDf
-  .theta <- .iniDf[!is.na(.iniDf$ntheta), ]
-  .thetaVals <- setNames(.theta$est, .theta$name)
-  .eta <- .iniDf[is.na(.iniDf$ntheta), ]
-  .eta <- .eta[.eta$neta1 == .eta$neta2, ]
-  
-  .nSubj <- length(unique(.dataNum$id))
-  .ids <- sort(unique(.dataNum$id))
-  
-  .plotTimeObserved <- .toPlotTime(.dataNum$time)
-  .plotTimeResult <- .toPlotTime(.dat$TIME)
-  
-  .tRange <- range(.plotTimeResult, na.rm = TRUE)
-  
-  if (!is.null(xLimits)) {
-    .tRangeForBins <- xLimits
-  } else {
-    .tRangeForBins <- .tRange
+  .findCol <- function(dat, x = NULL, choices = NULL) {
+    if (!is.null(x)) {
+      hit <- names(dat)[tolower(names(dat)) == tolower(x)]
+      if (length(hit) > 0) return(hit[1])
+      return(NA_character_)
+    }
+    
+    hit <- names(dat)[tolower(names(dat)) %in% tolower(choices)]
+    if (length(hit) > 0) return(hit[1])
+    
+    NA_character_
   }
   
-  .breaks <- seq(
-    .tRangeForBins[1],
-    .tRangeForBins[2],
-    length.out = nBins + 1
-  )
-  
-  .empDat <- data.frame(
-    TIME = .plotTimeObserved,
-    DV = .dataNum$DV
-  )
-  
-  .empDat$timeBin <- cut(
-    .empDat$TIME,
-    breaks = .breaks,
-    include.lowest = TRUE
-  )
-  
-  .empDat$timeMid <- ave(
-    .empDat$TIME,
-    .empDat$timeBin,
-    FUN = median
-  )
-  
-  .empDat <- .empDat[!is.na(.empDat$timeBin), ]
-  
-  .empProb <- aggregate(
-    DV ~ timeMid + timeBin,
-    data = .empDat,
-    FUN = mean
-  )
-  
-  names(.empProb)[3] <- "empirical"
-  
-  message(
-    "\u2139 Simulating VPC (",
-    nSim,
-    " replicates, ",
-    .nSubj,
-    " subjects)..."
-  )
-  
-  set.seed(seed)
-  
-  .simResults <- do.call(rbind, lapply(seq_len(nSim), function(s) {
-    if (s %% 100 == 0) {
-      message("  replicate ", s, "/", nSim)
+  .makeStratum <- function(dat, strata) {
+    if (is.null(strata)) {
+      return(rep("Overall", nrow(dat)))
     }
     
-    .newEtas <- MASS::mvrnorm(
-      n = .nSubj,
-      mu = rep(0, length(.etaNames)),
-      Sigma = .omega
+    strataCols <- vapply(
+      strata,
+      function(z) .findCol(dat, z),
+      character(1)
     )
     
-    if (is.null(dim(.newEtas))) {
-      .newEtas <- matrix(.newEtas, ncol = length(.etaNames))
+    if (any(is.na(strataCols))) {
+      stop(
+        "Missing strata columns: ",
+        paste(strata[is.na(strataCols)], collapse = ", "),
+        "\nAvailable columns are: ",
+        paste(names(dat), collapse = ", ")
+      )
     }
     
-    colnames(.newEtas) <- .etaNames
+    do.call(
+      paste,
+      c(dat[strataCols], sep = " | ")
+    )
+  }
+  
+  .piLabel <- paste0(ci * 100, "% prediction interval")
+  .alpha <- (1 - ci) / 2
+  
+  # ===========================================================================
+  # MODE 1: post rxSolve or post simulation data.frame
+  # ===========================================================================
+  
+  if (is.data.frame(result)) {
     
-    .simParams <- data.frame(id = .ids)
+    dat <- as.data.frame(result)
     
-    for (.n in names(.thetaVals)) {
-      .simParams[[.n]] <- .thetaVals[.n]
-    }
-    
-    for (j in seq_along(.etaNames)) {
-      .simParams[[.etaNames[j]]] <- .newEtas[, j]
-    }
-    
-    .simSolve <- tryCatch(
-      rxode2::rxSolve(
-        .predModel,
-        .simParams,
-        .dataNum,
-        returnType = "data.frame",
-        covsInterpolation = "locf",
-        omega = NULL,
-        addDosing = FALSE
-      ),
-      error = function(e) NULL
+    timeCol <- .findCol(
+      dat,
+      timeCol,
+      c("profday", "PROFDAY", "timeMid", "time", "TIME")
     )
     
-    if (is.null(.simSolve)) {
-      return(NULL)
+    if (is.na(timeCol)) {
+      stop("No time column found. Provide timeCol.")
     }
     
-    .simProb <- pmin(
-      pmax(.simSolve$rx_pred_, 1e-10),
-      1 - 1e-10
+    simCol0 <- .findCol(dat, simCol)
+    
+    if (is.na(simCol0)) {
+      simCol0 <- .findCol(
+        dat,
+        NULL,
+        c("sim_id", "sim.id", "study", "stud", "nStud", "replicate")
+      )
+    }
+    
+    if (is.na(simCol0)) {
+      dat$.sim_id <- 1
+      simCol0 <- ".sim_id"
+      if (!quiet) {
+        message("No simulation replicate column found; using one replicate only.")
+      }
+    }
+    
+    if (!is.null(yCol)) {
+      yCol <- .findCol(dat, yCol)
+      probCol <- NA_character_
+    } else if (!is.null(probCol)) {
+      probCol <- .findCol(dat, probCol)
+      yCol <- NA_character_
+    } else {
+      yCol <- .findCol(
+        dat,
+        NULL,
+        c("y_sim", "simDV", "sim", "DV")
+      )
+      
+      probCol <- .findCol(
+        dat,
+        NULL,
+        c("prob", "p1", "P1", "p", "P", "PRED", "IPRED")
+      )
+    }
+    
+    if (is.na(yCol) && is.na(probCol)) {
+      stop("No probability or simulated outcome column found. Provide probCol or yCol.")
+    }
+    
+    dat$timeMid <- .toPlotTime(dat[[timeCol]])
+    dat$stratum <- .makeStratum(dat, strata)
+    
+    if (!is.na(yCol)) {
+      vpcSim <- dat |>
+        group_by(
+          sim_id = .data[[simCol0]],
+          stratum,
+          timeMid
+        ) |>
+        summarise(
+          prob = mean(.data[[yCol]], na.rm = TRUE),
+          .groups = "drop"
+        )
+    } else {
+      vpcSim <- dat |>
+        group_by(
+          sim_id = .data[[simCol0]],
+          stratum,
+          timeMid
+        ) |>
+        summarise(
+          prob = mean(.data[[probCol]], na.rm = TRUE),
+          .groups = "drop"
+        )
+    }
+    
+    plotDat <- vpcSim |>
+      group_by(stratum, timeMid) |>
+      summarise(
+        piLow = quantile(prob, .alpha, na.rm = TRUE),
+        piMed = quantile(prob, 0.5, na.rm = TRUE),
+        piHigh = quantile(prob, 1 - .alpha, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    empDat <- NULL
+  }
+  
+  # ===========================================================================
+  # MODE 2: original categorical result object from as.nlmixr2.categorical()
+  # ===========================================================================
+  
+  if (!is.data.frame(result)) {
+    
+    .ui <- result$ui
+    .omega <- result$omega
+    .etaNames <- colnames(.omega)
+    
+    .predModel <- .categoricalPredModel(.ui)
+    
+    .prep <- if (quiet) {
+      suppressMessages(.categoricalPrepData(.ui))
+    } else {
+      .categoricalPrepData(.ui)
+    }
+    
+    .dataNum <- .prep$data
+    .dataNum$timePlot <- .toPlotTime(.dataNum$time)
+    .dataNum$stratum <- .makeStratum(.dataNum, strata)
+    
+    .iniDf <- .ui$iniDf
+    .theta <- .iniDf[!is.na(.iniDf$ntheta), ]
+    .thetaVals <- setNames(.theta$est, .theta$name)
+    
+    .nSubj <- length(unique(.dataNum$id))
+    .ids <- sort(unique(.dataNum$id))
+    
+    .tRange <- range(.dataNum$timePlot, na.rm = TRUE)
+    
+    if (!is.null(xLimits)) {
+      .binRange <- xLimits
+    } else {
+      .binRange <- .tRange
+    }
+    
+    .breaks <- seq(
+      .binRange[1],
+      .binRange[2],
+      length.out = nBins + 1
     )
     
-    .simSolve$simDV <- rbinom(
-      nrow(.simSolve),
-      size = 1,
-      prob = .simProb
-    )
-    
-    .simSolve$TIME_PLOT <- .toPlotTime(.simSolve$time)
-    
-    .simSolve$timeBin <- cut(
-      .simSolve$TIME_PLOT,
+    .dataNum$timeBin <- cut(
+      .dataNum$timePlot,
       breaks = .breaks,
       include.lowest = TRUE
     )
     
-    .simSolve$timeMid <- ave(
-      .simSolve$TIME_PLOT,
-      .simSolve$timeBin,
+    .dataNum$timeMid <- ave(
+      .dataNum$timePlot,
+      interaction(.dataNum$stratum, .dataNum$timeBin),
       FUN = median
     )
     
-    .simSolve <- .simSolve[!is.na(.simSolve$timeBin), ]
-    
-    .agg <- aggregate(
-      simDV ~ timeMid + timeBin,
-      data = .simSolve,
-      FUN = mean
-    )
-    
-    .agg$sim <- s
-    .agg
-  }))
-  
-  message("  \u2713 done")
-  
-  .simResults <- .simResults[!is.na(.simResults$timeMid), ]
-  
-  .alpha <- (1 - ci) / 2
-  
-  .piBounds <- aggregate(
-    simDV ~ timeMid + timeBin,
-    data = .simResults,
-    FUN = function(x) {
-      quantile(x, probs = c(.alpha, 0.5, 1 - .alpha))
+    if (showEmpirical) {
+      empDat <- .dataNum |>
+        filter(!is.na(timeBin)) |>
+        group_by(stratum, timeMid, timeBin) |>
+        summarise(
+          empirical = mean(DV, na.rm = TRUE),
+          .groups = "drop"
+        )
+    } else {
+      empDat <- NULL
     }
-  )
-  
-  .piDf <- data.frame(
-    timeMid = .piBounds$timeMid,
-    timeBin = .piBounds$timeBin,
-    piLow = .piBounds$simDV[, 1],
-    piMed = .piBounds$simDV[, 2],
-    piHigh = .piBounds$simDV[, 3]
-  )
-  
-  .plotDat <- merge(
-    .empProb,
-    .piDf,
-    by = c("timeMid", "timeBin")
-  )
-  
-  .plotDat <- .plotDat[order(.plotDat$timeMid), ]
-  
-  .piLabel <- paste0(ci * 100, "% Prediction interval")
-  
-  .longLines <- rbind(
-    data.frame(
-      timeMid = .plotDat$timeMid,
-      y = .plotDat$empirical,
-      element = "Empirical probability"
-    ),
-    data.frame(
-      timeMid = .plotDat$timeMid,
-      y = .plotDat$piMed,
-      element = "Predicted median"
-    )
-  )
-  
-  .longLines$element <- factor(
-    .longLines$element,
-    levels = c(
-      "Empirical probability",
-      .piLabel,
-      "Predicted median"
-    )
-  )
-  
-  if (!is.null(xLimits)) {
-    .xRange <- xLimits
-  } else {
-    .xRange <- .tRange
+    
+    set.seed(seed)
+    
+    simList <- lapply(seq_len(nSim), function(s) {
+      
+      .newEtas <- MASS::mvrnorm(
+        n = .nSubj,
+        mu = rep(0, length(.etaNames)),
+        Sigma = .omega
+      )
+      
+      if (is.null(dim(.newEtas))) {
+        .newEtas <- matrix(.newEtas, ncol = length(.etaNames))
+      }
+      
+      colnames(.newEtas) <- .etaNames
+      
+      .simParams <- data.frame(id = .ids)
+      
+      for (.n in names(.thetaVals)) {
+        .simParams[[.n]] <- .thetaVals[.n]
+      }
+      
+      for (j in seq_along(.etaNames)) {
+        .simParams[[.etaNames[j]]] <- .newEtas[, j]
+      }
+      
+      .simSolve <- tryCatch({
+        if (quiet) {
+          suppressWarnings(
+            suppressMessages(
+              rxode2::rxSolve(
+                .predModel,
+                .simParams,
+                .dataNum,
+                returnType = "data.frame",
+                covsInterpolation = "locf",
+                omega = NULL,
+                addDosing = FALSE
+              )
+            )
+          )
+        } else {
+          rxode2::rxSolve(
+            .predModel,
+            .simParams,
+            .dataNum,
+            returnType = "data.frame",
+            covsInterpolation = "locf",
+            omega = NULL,
+            addDosing = FALSE
+          )
+        }
+      }, error = function(e) NULL)
+      
+      if (is.null(.simSolve)) {
+        return(NULL)
+      }
+      
+      .simProb <- pmin(
+        pmax(.simSolve$rx_pred_, 1e-10),
+        1 - 1e-10
+      )
+      
+      data.frame(
+        sim_id = s,
+        stratum = .dataNum$stratum,
+        timeMid = .dataNum$timeMid,
+        timeBin = .dataNum$timeBin,
+        simDV = rbinom(
+          n = nrow(.simSolve),
+          size = 1,
+          prob = .simProb
+        )
+      ) |>
+        filter(!is.na(timeBin)) |>
+        group_by(sim_id, stratum, timeMid, timeBin) |>
+        summarise(
+          prob = mean(simDV),
+          .groups = "drop"
+        )
+    })
+    
+    vpcSim <- bind_rows(simList)
+    
+    plotDat <- vpcSim |>
+      group_by(stratum, timeMid) |>
+      summarise(
+        piLow = quantile(prob, .alpha, na.rm = TRUE),
+        piMed = quantile(prob, 0.5, na.rm = TRUE),
+        piHigh = quantile(prob, 1 - .alpha, na.rm = TRUE),
+        .groups = "drop"
+      )
   }
+  
+  # ===========================================================================
+  # Axis breaks
+  # ===========================================================================
   
   if (!is.null(xBreaks)) {
     .xBreaks <- xBreaks
   } else if (!is.null(xTickBy)) {
-    .xBreakMax <- ceiling(.xRange[2] / xTickBy) * xTickBy
+    .xRange <- if (is.null(xLimits)) {
+      range(plotDat$timeMid, na.rm = TRUE)
+    } else {
+      xLimits
+    }
     
     .xBreaks <- seq(
       from = xTickStart,
-      to = .xBreakMax,
+      to = ceiling(max(.xRange, na.rm = TRUE) / xTickBy) * xTickBy,
       by = xTickBy
     )
-    
-    .xBreaks <- .xBreaks[
-      .xBreaks >= min(.xRange, na.rm = TRUE) &
-        .xBreaks <= max(.xRange, na.rm = TRUE) + xTickBy
-    ]
   } else {
-    .xBreaks <- pretty(.xRange, n = nXTicks)
-  }
-  
-  .xLabels <- function(x) {
-    format(
-      round(x, xLabelDigits),
-      trim = TRUE,
-      scientific = FALSE
+    .xBreaks <- pretty(
+      range(plotDat$timeMid, na.rm = TRUE),
+      n = nXTicks
     )
   }
   
-  .xText <- if (isTRUE(rotateXLabels)) {
+  .xText <- if (rotateXLabels) {
     element_text(angle = 45, hjust = 1, vjust = 1)
   } else {
     element_text()
   }
   
-  ggplot() +
-    geom_ribbon(
-      data = .plotDat,
-      aes(
-        x = timeMid,
-        ymin = piLow,
-        ymax = piHigh,
-        fill = .piLabel
-      ),
-      alpha = 0.35
-    ) +
-    geom_line(
-      data = .longLines[.longLines$element == "Empirical probability", ],
-      aes(
-        x = timeMid,
-        y = y,
-        color = "Empirical probability",
-        linetype = "Empirical probability"
-      ),
-      linewidth = 1
-    ) +
-    geom_point(
-      data = .longLines[.longLines$element == "Empirical probability", ],
-      aes(
-        x = timeMid,
-        y = y,
-        color = "Empirical probability"
-      ),
-      size = 1.8
-    ) +
-    geom_line(
-      data = .longLines[.longLines$element == "Predicted median", ],
-      aes(
-        x = timeMid,
-        y = y,
-        color = "Predicted median",
-        linetype = "Predicted median"
-      ),
-      linewidth = 0.9
-    ) +
+  # ===========================================================================
+  # Plot
+  # ===========================================================================
+  
+  plotDat$piElement <- .piLabel
+  plotDat$medianElement <- "Predicted median"
+  
+  p <- ggplot()
+  
+  if (showPI) {
+    p <- p +
+      geom_ribbon(
+        data = plotDat,
+        aes(
+          x = timeMid,
+          ymin = piLow,
+          ymax = piHigh,
+          fill = piElement
+        ),
+        alpha = 0.35
+      )
+  }
+  
+  if (showMedian) {
+    p <- p +
+      geom_line(
+        data = plotDat,
+        aes(
+          x = timeMid,
+          y = piMed,
+          color = medianElement,
+          linetype = medianElement
+        ),
+        linewidth = 0.9
+      )
+  }
+  
+  if (showEmpirical && !is.null(empDat)) {
+    empDat$empElement <- "Empirical probability"
+    
+    p <- p +
+      geom_line(
+        data = empDat,
+        aes(
+          x = timeMid,
+          y = empirical,
+          color = empElement,
+          linetype = empElement
+        ),
+        linewidth = 1
+      ) +
+      geom_point(
+        data = empDat,
+        aes(
+          x = timeMid,
+          y = empirical,
+          color = empElement
+        ),
+        size = 1.8
+      )
+  }
+  
+  p <- p +
     scale_fill_manual(
       name = NULL,
       values = setNames("#6BAED6", .piLabel)
@@ -1697,7 +1820,13 @@ plot_categorical_vpc <- function(result, nBins = 10, nSim = 500,
     scale_x_continuous(
       limits = xLimits,
       breaks = .xBreaks,
-      labels = .xLabels,
+      labels = function(x) {
+        format(
+          round(x, xLabelDigits),
+          trim = TRUE,
+          scientific = FALSE
+        )
+      },
       expand = expansion(mult = c(0.01, 0.03))
     ) +
     scale_y_continuous(
@@ -1725,4 +1854,10 @@ plot_categorical_vpc <- function(result, nBins = 10, nSim = 500,
       plot.title = element_text(hjust = 0.5),
       plot.margin = margin(10, 10, 10, 10)
     )
+  
+  if (length(unique(plotDat$stratum)) > 1) {
+    p <- p + facet_wrap(~ stratum)
+  }
+  
+  p
 }
