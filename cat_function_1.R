@@ -272,107 +272,239 @@
        call. = FALSE)
 }
 
-
-# ══════════════════════════════════════════════════════════════
-# SECTION 2: PATCHED .handleSingleEndpoint
-# ══════════════════════════════════════════════════════════════
-
-.handleSingleEndpoint_patched <- function(endpoint) {
-  if (endpoint$dist == "event") {
-    stop("'event' endpoint not supported in translation yet", call. = FALSE)
-  } else if (endpoint$dist == "categorical") {
-    return(.handleCategoricalEndpoint(endpoint))
-  } else if (endpoint$dist == "count") {
-    stop("'count' endpoint not supported in translation yet", call. = FALSE)
-  } else if (endpoint$dist == "lognormal") {
-    .add <- "lnorm"
-  } else if (endpoint$dist == "normal") {
-    .add <- "add"
-  } else if (endpoint$dist == "logitnormal") {
-    .add <- "logitNorm"
-  } else if (endpoint$dist == "probitnormal") {
-    .add <- "probitNorm"
-  }
-  .prd <- ""
-  if (endpoint$var != endpoint$pred) {
-    .prd <- paste0(endpoint$var, " <- ", endpoint$pred, "\n")
-  }
-  if (endpoint$err$errName == "constant") {
-    return(paste0(
-      .prd, endpoint$var, " ~ ", .add, "(",
-      endpoint$err$typical[1],
-      ifelse(endpoint$dist == "logitnormal",
-             paste0(", ", endpoint$min, ", ", endpoint$max), ""),
-      ")"
-    ))
-  } else if (endpoint$err$errName == "proportional") {
-    return(paste0(
-      .prd, endpoint$var, " ~ ",
-      ifelse(.add == "add", "", paste0(.add, "(NA) + ")),
-      "prop(", endpoint$err$typical[1], ")"
-    ))
-  }
-  if (endpoint$err$errName %in% c("combined1", "combined1c")) {
-    .combined <- " + combined1()"
-  } else if (endpoint$err$errName %in% c("combined2", "combined2c")) {
-    .combined <- " + combined2()"
-  }
-  if (endpoint$err$errName %in% c("combined1", "combined2")) {
-    .prop <- paste0(" + prop(", endpoint$err$typical[2], ")")
-  } else if (endpoint$err$errName %in% c("combined1c", "combined2c")) {
-    .prop <- paste0(" + pow(", endpoint$err$typical[2], ", ",
-                    endpoint$err$typical[3], ")")
-  }
-  paste0(.prd, endpoint$var, " ~ ", .add, "(",
-         endpoint$err$typical[1], ")", .prop, .combined)
+# Shared patch environment: stores original monolix2rx functions once
+.monolix2rx_patch_env <- if (
+  exists(".monolix2rx_patch_env", envir = .GlobalEnv, inherits = FALSE)
+) {
+  get(".monolix2rx_patch_env", envir = .GlobalEnv)
+} else {
+  e <- new.env(parent = emptyenv())
+  assign(".monolix2rx_patch_env", e, envir = .GlobalEnv)
+  e
 }
 
-environment(.handleSingleEndpoint_patched) <- asNamespace("monolix2rx")
-assignInNamespace(".handleSingleEndpoint",
-                  .handleSingleEndpoint_patched,
-                  ns = "monolix2rx")
-
 
 # ══════════════════════════════════════════════════════════════
-# SECTION 3: PATCHED .def2ini — Inject n <- fix(1)
+# SECTION 2: IDEMPOTENT PATCHED .handleSingleEndpoint
 # ══════════════════════════════════════════════════════════════
 
-.def2ini_original_body <- body(monolix2rx:::.def2ini)
-.def2ini_original_fmls <- formals(monolix2rx:::.def2ini)
-.def2ini_original_env <- environment(monolix2rx:::.def2ini)
-
-.def2ini_patched <- function(def, pars, longDef) {
-  .origFn <- .def2ini_original_env$.self
-  if (is.null(.origFn)) {
-    .origFn <- function(def, pars, longDef) {}
-    formals(.origFn) <- .def2ini_original_fmls
-    body(.origFn) <- .def2ini_original_body
-    environment(.origFn) <- .def2ini_original_env
+.install_handleSingleEndpoint_patch <- function(force = FALSE) {
+  current <- monolix2rx:::.handleSingleEndpoint
+  
+  if (
+    !force &&
+    isTRUE(attr(current, "categorical_endpoint_patch"))
+  ) {
+    message("monolix2rx::.handleSingleEndpoint patch already installed.")
+    return(invisible(TRUE))
   }
-  .ini <- .origFn(def, pars, longDef)
-  .hasCategorical <- any(vapply(seq_along(longDef$endpoint), function(i) {
-    longDef$endpoint[[i]]$dist == "categorical"
-  }, logical(1)))
-  if (.hasCategorical) {
+  
+  if (!exists("handleSingleEndpoint_original", envir = .monolix2rx_patch_env, inherits = FALSE)) {
+    assign(
+      "handleSingleEndpoint_original",
+      current,
+      envir = .monolix2rx_patch_env
+    )
+  }
+  
+  .handleSingleEndpoint_patched <- function(endpoint) {
+    if (endpoint$dist == "event") {
+      stop("'event' endpoint not supported in translation yet", call. = FALSE)
+    } else if (endpoint$dist == "categorical") {
+      return(.handleCategoricalEndpoint(endpoint))
+    } else if (endpoint$dist == "count") {
+      stop("'count' endpoint not supported in translation yet", call. = FALSE)
+    } else if (endpoint$dist == "lognormal") {
+      .add <- "lnorm"
+    } else if (endpoint$dist == "normal") {
+      .add <- "add"
+    } else if (endpoint$dist == "logitnormal") {
+      .add <- "logitNorm"
+    } else if (endpoint$dist == "probitnormal") {
+      .add <- "probitNorm"
+    }
+    
+    .prd <- ""
+    
+    if (endpoint$var != endpoint$pred) {
+      .prd <- paste0(endpoint$var, " <- ", endpoint$pred, "\n")
+    }
+    
+    if (endpoint$err$errName == "constant") {
+      return(paste0(
+        .prd,
+        endpoint$var,
+        " ~ ",
+        .add,
+        "(",
+        endpoint$err$typical[1],
+        ifelse(
+          endpoint$dist == "logitnormal",
+          paste0(", ", endpoint$min, ", ", endpoint$max),
+          ""
+        ),
+        ")"
+      ))
+    } else if (endpoint$err$errName == "proportional") {
+      return(paste0(
+        .prd,
+        endpoint$var,
+        " ~ ",
+        ifelse(.add == "add", "", paste0(.add, "(NA) + ")),
+        "prop(",
+        endpoint$err$typical[1],
+        ")"
+      ))
+    }
+    
+    if (endpoint$err$errName %in% c("combined1", "combined1c")) {
+      .combined <- " + combined1()"
+    } else if (endpoint$err$errName %in% c("combined2", "combined2c")) {
+      .combined <- " + combined2()"
+    }
+    
+    if (endpoint$err$errName %in% c("combined1", "combined2")) {
+      .prop <- paste0(" + prop(", endpoint$err$typical[2], ")")
+    } else if (endpoint$err$errName %in% c("combined1c", "combined2c")) {
+      .prop <- paste0(
+        " + pow(",
+        endpoint$err$typical[2],
+        ", ",
+        endpoint$err$typical[3],
+        ")"
+      )
+    }
+    
+    paste0(
+      .prd,
+      endpoint$var,
+      " ~ ",
+      .add,
+      "(",
+      endpoint$err$typical[1],
+      ")",
+      .prop,
+      .combined
+    )
+  }
+  
+  environment(.handleSingleEndpoint_patched) <- environment()
+  
+  attr(.handleSingleEndpoint_patched, "categorical_endpoint_patch") <- TRUE
+  
+  assignInNamespace(
+    ".handleSingleEndpoint",
+    .handleSingleEndpoint_patched,
+    ns = "monolix2rx"
+  )
+  
+  message("Installed monolix2rx::.handleSingleEndpoint categorical patch.")
+  
+  invisible(TRUE)
+}
+
+.uninstall_handleSingleEndpoint_patch <- function() {
+  if (exists("handleSingleEndpoint_original", envir = .monolix2rx_patch_env, inherits = FALSE)) {
+    assignInNamespace(
+      ".handleSingleEndpoint",
+      get("handleSingleEndpoint_original", envir = .monolix2rx_patch_env),
+      ns = "monolix2rx"
+    )
+    
+    message("Restored original monolix2rx::.handleSingleEndpoint.")
+  }
+  
+  invisible(TRUE)
+}
+
+
+
+# ══════════════════════════════════════════════════════════════
+# SECTION 3: IDEMPOTENT PATCHED .def2ini — Inject n <- fix(1) once
+# ══════════════════════════════════════════════════════════════
+
+
+
+.def2ini_has_n_fix <- function(x) {
+  any(grepl("\\bn\\s*<-\\s*fix\\s*\\(", deparse(x), perl = TRUE))
+}
+
+.install_def2ini_patch <- function(force = FALSE) {
+  current <- monolix2rx:::.def2ini
+  
+  if (
+    !force &&
+    isTRUE(attr(current, "categorical_n_patch"))
+  ) {
+    message("monolix2rx::.def2ini patch already installed.")
+    return(invisible(TRUE))
+  }
+  
+  if (!exists("def2ini_original", envir = .monolix2rx_patch_env, inherits = FALSE)) {
+    assign(
+      "def2ini_original",
+      current,
+      envir = .monolix2rx_patch_env
+    )
+  }
+  
+  .def2ini_patched <- function(def, pars, longDef) {
+    .origFn <- get(
+      "def2ini_original",
+      envir = .monolix2rx_patch_env
+    )
+    
+    .ini <- .origFn(def, pars, longDef)
+    
+    .hasCategorical <- any(vapply(seq_along(longDef$endpoint), function(i) {
+      identical(longDef$endpoint[[i]]$dist, "categorical")
+    }, logical(1)))
+    
+    if (!.hasCategorical) {
+      return(.ini)
+    }
+    
+    # Do not inject twice.
+    if (.def2ini_has_n_fix(.ini)) {
+      return(.ini)
+    }
+    
     .innerBlock <- .ini[[2]]
     .nExpr <- quote(n <- fix(1))
     .newBlock <- as.call(c(as.list(.innerBlock), list(.nExpr)))
     .ini[[2]] <- .newBlock
+    
+    .ini
   }
-  .ini
+  
+  environment(.def2ini_patched) <- environment()
+  
+  attr(.def2ini_patched, "categorical_n_patch") <- TRUE
+  
+  assignInNamespace(
+    ".def2ini",
+    .def2ini_patched,
+    ns = "monolix2rx"
+  )
+  
+  message("Installed monolix2rx::.def2ini categorical n patch.")
+  
+  invisible(TRUE)
 }
 
-environment(.def2ini_patched) <- list2env(
-  list(
-    .def2ini_original_body = .def2ini_original_body,
-    .def2ini_original_fmls = .def2ini_original_fmls,
-    .def2ini_original_env = .def2ini_original_env
-  ),
-  parent = asNamespace("monolix2rx")
-)
-
-assignInNamespace(".def2ini", .def2ini_patched, ns = "monolix2rx")
-
+.uninstall_def2ini_patch <- function() {
+  if (exists("def2ini_original", envir = .monolix2rx_patch_env, inherits = FALSE)) {
+    assignInNamespace(
+      ".def2ini",
+      get("def2ini_original", envir = .monolix2rx_patch_env),
+      ns = "monolix2rx"
+    )
+    
+    message("Restored original monolix2rx::.def2ini.")
+  }
+  
+  invisible(TRUE)
+}
 
 # ══════════════════════════════════════════════════════════════
 # SECTION 4: COVARIATE CODE FIXER
@@ -1057,34 +1189,9 @@ monolix2rx_categorical <- function(mlxtranFile,
   to
 }
 
-.getAttachedMonolixData <- function(ui) {
-  .data <- attr(ui, "monolixData", exact = TRUE)
-  if (!is.null(.data)) return(.data)
-  
-  .data <- tryCatch(ui$monolixData, error = function(e) NULL)
-  if (!is.null(.data)) return(.data)
-  
-  NULL
-}
 
-.restoreMonolixDataAttrs <- function(to, from) {
-  .attrs <- c(
-    "monolixData",
-    "monolixDataPath",
-    "monolixDataPathOld",
-    "monolixDataFile",
-    "monolixDataFileOld"
-  )
-  
-  for (.nm in .attrs) {
-    .val <- attr(from, .nm, exact = TRUE)
-    if (!is.null(.val)) {
-      attr(to, .nm) <- .val
-    }
-  }
-  
-  to
-}
+
+
 
 .categoricalPrepData <- function(ui, predModel = NULL) {
   .data <- .getAttachedMonolixData(ui)
@@ -1861,3 +1968,7 @@ plot_categorical_vpc <- function(result,
   
   p
 }
+
+
+.install_handleSingleEndpoint_patch()
+.install_def2ini_patch()
